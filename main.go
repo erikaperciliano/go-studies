@@ -7,19 +7,30 @@ import (
 	"time"
 )
 
+// Higher-Order Function (HOF) | Log middleware
+func Log(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		begin := time.Now()
+		next.ServeHTTP(w, r)
+		fmt.Println(r.URL.String(), r.Method, time.Since(begin))
+	})
+}
+
 func main() {
 	mux := http.NewServeMux() // Create a new mux (multiplexer)
 
 	// Define the healthcheck route
-	mux.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		fmt.Println(id)
 		// Send response to the client
 		fmt.Fprintf(w, "hello, world!")
 	})
 
 	// Create the HTTP server with timeouts
 	srv := &http.Server{
-		Addr:                         ":8080", // The address to listen on
-		Handler:                      mux,     // Attach the mux handler
+		Addr:                         ":8080",  // The address to listen on
+		Handler:                      Log(mux), // Attach the mux handler
 		DisableGeneralOptionsHandler: false,
 		ReadTimeout:                  10 * time.Second,
 		WriteTimeout:                 10 * time.Second,
@@ -32,6 +43,4 @@ func main() {
 			panic(err) // Panic if server fails to start
 		}
 	}
-
-	fmt.Println("Server has been closed") // Will execute after the server is closed
 }
