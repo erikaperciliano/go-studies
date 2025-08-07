@@ -1,0 +1,20 @@
+# Directories
+bin/
+vendor/
+
+# Build artifacts
+*.exe
+*.out
+*.test
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Log files
+*.log
+*.tmp
+
+# Swap files (Vim, Emacs, etc.)
+*.swp
+*.swo

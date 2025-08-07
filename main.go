@@ -1,46 +1,47 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Higher-Order Function (HOF) | Log middleware
-func Log(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		begin := time.Now()
-		next.ServeHTTP(w, r)
-		fmt.Println(r.URL.String(), r.Method, time.Since(begin))
-	})
-}
-
 func main() {
-	mux := http.NewServeMux() // Create a new mux (multiplexer)
+	r := chi.NewMux()
 
-	// Define the healthcheck route
-	mux.HandleFunc("/api/users/{id}", func(w http.ResponseWriter, r *http.Request) {
-		id := r.PathValue("id")
-		fmt.Println(id)
-		// Send response to the client
-		fmt.Fprintf(w, "hello, world!")
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+
+	r.Get("/horario", func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		fmt.Fprintln(w, now)
 	})
 
-	// Create the HTTP server with timeouts
-	srv := &http.Server{
-		Addr:                         ":8080",  // The address to listen on
-		Handler:                      Log(mux), // Attach the mux handler
-		DisableGeneralOptionsHandler: false,
-		ReadTimeout:                  10 * time.Second,
-		WriteTimeout:                 10 * time.Second,
-		IdleTimeout:                  1 * time.Second,
-	}
+	r.Route("/api", func(r chi.Router) {
+		r.Route("/v1", func(r chi.Router) {
+			r.Get("/users", func(w http.ResponseWriter, r *http.Request) {})
+		})
 
-	// Start the server and listen for requests
-	if err := srv.ListenAndServe(); err != nil {
-		if !errors.Is(err, http.ErrServerClosed) {
-			panic(err) // Panic if server fails to start
-		}
+		r.Route("/v2", func(r chi.Router) {})
+
+		r.With(middleware.RealIP).Get("/users", func(w http.ResponseWriter, r *http.Request) {})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.BasicAuth("", map[string]string{
+				"admin": "adimin",
+			}))
+
+			r.Get("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintln(w, "ping")
+			})
+		})
+	})
+
+	if err := http.ListenAndServe(":8080", r); err != nil {
+		panic(err)
 	}
 }
