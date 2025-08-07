@@ -28,7 +28,10 @@ func main() {
 
 		r.Route("/v2", func(r chi.Router) {})
 
-		r.With(middleware.RealIP).Get("/users", func(w http.ResponseWriter, r *http.Request) {})
+		r.With(middleware.RealIP).Get("/users/{id:[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
+			id := chi.URLParam(r, "id")
+			fmt.Println(id)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.BasicAuth("", map[string]string{
