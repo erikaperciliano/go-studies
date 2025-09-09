@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -20,6 +24,7 @@ type Response struct {
 func sendJSON(w http.ResponseWriter, resp Response, status int) {
 	data, err := json.Marshal(resp)
 	if err != nil {
+		slog.Error("error ao fazer mashal de json", "error", err)
 		fmt.Println("error ao fazer marshal de json", err)
 		sendJSON(w, Response{Error: "something went wrong"}, http.StatusInternalServerError)
 		return
@@ -27,7 +32,7 @@ func sendJSON(w http.ResponseWriter, resp Response, status int) {
 
 	w.WriteHeader(status)
 	if _, err := w.Write(data); err != nil {
-		fmt.Println("error ao enviar resposta: ", err)
+		slog.Error("error ao enviar resposta:", "error", err)
 		return
 	}
 }
@@ -39,7 +44,50 @@ type User struct {
 	Password string `json:"-"`
 }
 
+type Password string
+
+func (p Password) LogValue() slog.Value {
+	return slog.StringValue("[REDACTED]")
+}
+
+func (u User) LogValue() slog.Value {
+	return slog.GroupValue(slog.Int64("id", u.ID), slog.String("role", u.Role))
+}
+
+const LevelFoo = slog.Level(-50)
+
 func main() {
+	opts := &slog.HandlerOptions{
+		AddSource: true,
+		Level:     LevelFoo,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == "level" {
+				level := a.Value.String()
+				if level == "DEBUG-46" {
+					a.Value = slog.StringValue("FOO")
+				}
+			}
+
+			return a
+		},
+	}
+	l := slog.New(slog.NewJSONHandler(os.Stdout, opts))
+	p := Password("123456")
+	slog.Info("password", "p", p)
+	slog.SetDefault(l)
+	slog.Info("Serviço sendo iniciado", "time", time.Now(), "version", "1.0.0")
+	l.LogAttrs(
+		context.Background(),
+		slog.LevelInfo,
+		"tivemos um http request",
+		slog.Group("http_data",
+			slog.String("method", http.MethodDelete),
+			slog.Int("status", http.StatusOK),
+		),
+		slog.Duration("time_taken", time.Second),
+		slog.String("user_agent", "hasuida"),
+	)
+
 	r := chi.NewMux()
 
 	r.Use(middleware.Recoverer)
@@ -102,7 +150,7 @@ func handlePostUsers(db map[int64]User) http.HandlerFunc {
 				return
 			}
 
-			fmt.Println(err)
+			slog.Error("falha ao ler o json do usuário", "error", err)
 			sendJSON(w, Response{Error: "something went wrong"}, http.StatusInternalServerError)
 			return
 		}
